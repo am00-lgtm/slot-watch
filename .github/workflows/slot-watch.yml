@@ -1,0 +1,39 @@
+name: slot watch
+
+# Polls public H-1B slot trackers every 10 minutes and sends a Telegram alert
+# when new sightings appear. Alert-only: never touches any login or
+# scheduling portal, never logs in anywhere, never books anything.
+
+on:
+  schedule:
+    - cron: "*/10 * * * *"
+  workflow_dispatch:  # allows a manual test run from the Actions tab
+
+permissions:
+  contents: write  # needed to persist state.json between runs
+
+jobs:
+  watch:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Check for new H-1B sightings
+        env:
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+        run: python3 monitor.py
+
+      - name: Persist state for next run
+        run: |
+          git config user.name "slot-watch"
+          git config user.email "slot-watch@local"
+          git add state.json
+          if ! git diff --cached --quiet; then
+            git commit -m "chore: update slot state [skip ci]"
+            git push
+          fi
