@@ -1,11 +1,11 @@
-# H-1B Slot Watch (India)
+# Visa Slot Watch
 
 Polls public US visa slot trackers for H-1B availability at posts in India and
 sends a Telegram alert when new sightings appear. Alert-only.
 
 ## How it works
 
-Every 10 minutes (GitHub Actions schedule), `monitor.py` fetches two public
+Every 10 minutes (GitHub Actions schedule), `monitor.py` fetches public
 tracker pages, diffs sightings against `state.json`, and messages a Telegram
 bot only when something new appears.
 
