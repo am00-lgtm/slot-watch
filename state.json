@@ -1,0 +1,13 @@
+{
+  "last_errors": [
+    "usvisaslots.app: HTTP Error 429: Too Many Requests"
+  ],
+  "last_run": "2026-09-19T14:38:33+00:00",
+  "seen": {
+    "visagrader|Chennai|Biometrics|H-1B|10/15/2026|2": "2026-09-19T14:38:33+00:00",
+    "visagrader|Chennai|Biometrics|H-1B|11/2/2026|2": "2026-09-19T14:38:33+00:00",
+    "visagrader|Chennai|Interview|H-1B|11/23/2026|10": "2026-09-19T14:38:33+00:00",
+    "visagrader|Hyderabad|Interview|H-1B|12/2/2026|1": "2026-09-19T14:38:33+00:00",
+    "visagrader|New Delhi|Interview|H-1B|10/1/2026|2": "2026-09-19T14:38:33+00:00"
+  }
+}
