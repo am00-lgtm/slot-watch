@@ -3,21 +3,20 @@
 H-1B US visa slot monitor - India consulates.
 
 What it does:
-  * Polls PUBLIC tracker pages (VisaGrader's India page and usvisaslots.app's
-    India H-1B dashboard) for newly reported H-1B slot sightings.
+  * Polls VisaGrader's PUBLIC India tracker page for newly reported H-1B
+    slot sightings.
   * Compares against state.json; sends ONE Telegram message per run when new
     sightings appear (batched, capped). Otherwise stays silent.
 
 Safety properties (auditable - please read before deploying):
-  * Only performs HTTPS GET against three allow-listed hosts:
-      visagrader.com, www.usvisaslots.app, api.telegram.org
+  * Only performs HTTPS GET against two allow-listed hosts:
+      visagrader.com, api.telegram.org
     It NEVER visits any login page or scheduling portal.
   * No credentials anywhere in code. The only secrets are read from
     environment variables (TELEGRAM_BOT_TOKEN, TELEGRAM_CHAT_ID), which in
     production come from GitHub Actions encrypted secrets - never committed.
   * Standard library only - no third-party packages to audit.
-  * Polite: descriptive User-Agent, small delay between sources, 10-minute
-    schedule (not aggressive).
+  * Polite: descriptive User-Agent, 10-minute schedule (not aggressive).
 """
 
 import json
@@ -33,10 +32,9 @@ from html.parser import HTMLParser
 # Configuration
 # ----------------------------------------------------------------------------
 
-ALLOWED_HOSTS = {"visagrader.com", "www.usvisaslots.app", "api.telegram.org"}
+ALLOWED_HOSTS = {"visagrader.com", "api.telegram.org"}
 
 VISAGRADER_INDIA = "https://visagrader.com/us-visa-time-slots-availability/india-ind"
-USVISASLOTS_INDIA_H1B = "https://www.usvisaslots.app/?countries=India&visaType=H1B"
 
 USER_AGENT = (
     "Mozilla/5.0 (compatible; H1BSlotMonitor/1.0; personal research monitor)"
@@ -157,32 +155,6 @@ def parse_visagrader(html):
     return sightings
 
 
-def parse_usvisaslots(html):
-    """usvisaslots.app dashboard table:
-    Country | City | Visa Type | Earliest Date | Fetched | TCN."""
-    parser = TableExtractor()
-    parser.feed(html)
-    sightings = []
-    for row in find_table(parser.tables, "Earliest Date"):
-        if len(row) < 6:
-            continue
-        country, city, visa_type, earliest, fetched, _tcn = row[:6]
-        if not earliest or earliest.strip().lower() in {"na", "n/a", "-", "none"}:
-            continue
-        sightings.append({
-            "source": "usvisaslots.app",
-            "consulate": city,
-            "appt_type": "earliest-available",
-            "visa": visa_type,
-            "date": earliest,
-            "count": "",
-            "reported": f"fetched {fetched}",
-            "key": "|".join(["usvisaslots", city, visa_type, earliest]),
-            "label": f"{city} - earliest {visa_type} date now {earliest} (fetched {fetched})",
-        })
-    return sightings
-
-
 # ----------------------------------------------------------------------------
 # Telegram
 # ----------------------------------------------------------------------------
@@ -234,35 +206,13 @@ def main():
     state = load_state() or {"seen": {}}
     seen = state.get("seen", {})
 
-    # usvisaslots.app rate-limits shared IPs, so it runs on a lighter cadence
-    # (every 3rd run, ~30 min). VisaGrader stays on the full 10-minute cadence.
-    run_count = state.get("run_count", 0) + 1
-    state["run_count"] = run_count
-    fetch_secondary = (run_count % 3 == 1)
-
     current = {}   # key -> sighting
     errors = []
-    ok_sources = set()  # source prefixes that fetched successfully this run
-    sources_fetched = []
 
     try:
         current.update({s["key"]: s for s in parse_visagrader(fetch(VISAGRADER_INDIA))})
-        ok_sources.add("visagrader")
-        sources_fetched.append("visagrader")
-    except Exception as exc:  # noqa: BLE001 - one bad source must not kill the run
+    except Exception as exc:  # noqa: BLE001 - report, don't crash the run
         errors.append(f"visagrader: {exc}")
-
-    time.sleep(2)  # be polite between sources
-
-    if fetch_secondary:
-        try:
-            current.update({s["key"]: s for s in parse_usvisaslots(fetch(USVISASLOTS_INDIA_H1B))})
-            ok_sources.add("usvisaslots")
-            sources_fetched.append("usvisaslots")
-        except Exception as exc:  # noqa: BLE001
-            errors.append(f"usvisaslots.app: {exc}")
-    # else: secondary source skipped this run; its prior sightings stay in
-    # state (not pruned) so nothing re-alerts when it is fetched again.
 
     new_keys = [k for k in current if k not in seen]
     telegram_status = "no-alert"
@@ -296,8 +246,9 @@ def main():
     # ONLY for sources that succeeded this run. If a source errored (e.g. a
     # transient 429), we must not forget its sightings, or we'd re-alert on
     # everything when it recovers.
+    fetched_ok = not errors
     for key in list(seen):
-        if key not in current and key.split("|", 1)[0] in ok_sources:
+        if key not in current and fetched_ok:
             del seen[key]
     state["seen"] = seen
     state["last_run"] = now
@@ -307,8 +258,6 @@ def main():
 
     summary = {
         "run_at": now,
-        "run_count": run_count,
-        "sources_fetched": sources_fetched,
         "sightings_found": len(current),
         "new_sightings": len(new_keys) if not first_run else 0,
         "telegram": telegram_status,
