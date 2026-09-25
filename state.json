@@ -1,6 +1,8 @@
 {
-  "last_errors": [],
-  "last_run": "2026-09-25T15:22:42+00:00",
+  "last_errors": [
+    "visagrader: HTTP Error 503: Service Unavailable"
+  ],
+  "last_run": "2026-09-25T15:37:04+00:00",
   "run_count": 8,
   "seen": {
     "visagrader|Chennai|Biometrics|H-1B|10/15/2026|2": "2026-09-19T14:38:33+00:00",
